@@ -3,7 +3,8 @@
 import requests
 import json
 from http.client import responses
-from typing import List
+from ratelimit import limits, sleep_and_retry
+from typing import Dict, List
 
 baseURL = "https://test.bgpstuff.net"
 
@@ -56,7 +57,6 @@ class Response:
 
     def getRoute(self):
         resp = self.__getRequest("/route/" + self.ip)
-        # print(json.dumps(resp.json(), indent=4))
         if self.status_code != 200:
             return
         self.route = resp.json()['Response']['Route']
@@ -137,13 +137,73 @@ class Response:
             return
         self.asname = resp.json()['Response']['ASName']
 
-    def __getRequest(self, url):
-        resp = requests.get(baseURL + url, headers=getJSONHeader())
-        self.status_code = resp.status_code
-        # Temp. Once queries working, user will need to check status
+    @property
+    def total_ipv4(self) -> int:
+        return self._total_ipv4
+
+    @total_ipv4.setter
+    def total_ipv4(self, count):
+        self._total_ipv4 = count
+
+    @property
+    def total_ipv6(self) -> int:
+        return self._total_ipv6
+
+    @total_ipv6.setter
+    def total_ipv6(self, count):
+        self._total_ipv6 = count
+
+    def getTotals(self):
+        resp = self.__getRequest("/totals/")
+        if self.status_code != 200:
+            return
+        self.total_ipv4 = resp.json()['Response']['Totals']['Ipv4']
+        self.total_ipv6 = resp.json()['Response']['Totals']['Ipv6']
+
+    @property
+    def invalids(self) -> Dict:
+        return self._invalids
+
+    @invalids.setter
+    def invalids(self, invalids):
+        self._invalids = invalids
+
+    def checkInvalid(self, asn) -> List:
+        return self._invalids.get(asn, [])
+
+    def getInvalids(self):
+        resp = self.__getRequest("/invalids/")
+        if self.status_code != 200:
+            return
+        data = resp.json()['Response']['Invalids']
+        invalids = {}
+        for d in data:
+            invalids[d['ASN']] = d['Prefixes']
+        self.invalids = invalids
+
+    @property
+    def sourced(self) -> List:
+        return self._sourced
+
+    @sourced.setter
+    def sourced(self, sourced):
+        self._sourced = sourced
+
+    def getSourced(self):
+        resp = self.__getRequest("/sourced/{}".format(self.asn))
         if self.status_code != 200:
             return
 
+    @sleep_and_retry
+    @limits(calls=20, period=60)
+    def __getRequest(self, url):
+        resp = requests.get(baseURL + url, headers=getJSONHeader())
+        self.status_code = resp.status_code
+        if self.status_code != 200:
+            return
+        self.sourced = resp.json()['Response']['Sourced']['Prefixes']
+
+        #print(json.dumps(resp.json(), indent=4))
         self.exists = resp.json()['Response']['Exists']
         return resp
 
@@ -153,17 +213,18 @@ def getJSONHeader():
 
 
 if __name__ == "__main__":
-    ips = ["1.1.1.1", "4.2.2.1", "123.1.204.0", "11.1.1.1", "10.0.0.0"]
+    ips = ["1.1.1.1", "4.2.2.1", "123.1.204.0",
+           "11.1.1.1", "10.0.0.0", "2600::", "50.114.112.0"]
     asns = [123, 3356, 15169, 66000, 3049573045]
-    '''for ip in ips:
+    for ip in ips:
         q = Response()
         q.ip = ip
         q.getRoute()
         if q.status_code != 200:
-            print(q.status + " for " + q.ip)
-            break
+            print("{} for {}".format(q.status, q.ip))
+            continue
         if q.exists:
-            print(q.route)
+            print("The route for {} is {}".format(q.ip, q.route))
         else:
             print("route does not exist for " + q.ip)
 
@@ -172,8 +233,8 @@ if __name__ == "__main__":
         q.ip = ip
         q.getOrigin()
         if q.status_code != 200:
-            print(q.status + " for " + q.ip)
-            break
+            print("{} for {}".format(q.status, q.ip))
+            continue
         if q.exists:
             print("The origin for " + q.ip + " is " + q.origin)
         else:
@@ -185,8 +246,8 @@ if __name__ == "__main__":
         q.ip = ip
         q.getASPath()
         if q.status_code != 200:
-            print(q.status + " for " + q.ip)
-            break
+            print("{} for {}".format(q.status, q.ip))
+            continue
         if q.exists:
             print("The aspath for {} is {}".format(q.ip, q.full_as_path()))
         else:
@@ -198,13 +259,13 @@ if __name__ == "__main__":
         q.ip = ip
         q.getROA()
         if q.status_code != 200:
-            print(q.status + " for " + q.ip)
-            break
+            print("{} for {}".format(q.status, q.ip))
+            continue
         if q.exists:
             print("The roa for {} is {}".format(q.ip, q.roa))
         else:
             print("route does not exist for " + q.ip +
-                  " so unable to check the roa")'''
+                  " so unable to check the roa")
 
     for asn in asns:
         q = Response()
@@ -217,3 +278,29 @@ if __name__ == "__main__":
             print("The asname for {} is {}".format(q.asn, q.asname))
         else:
             print("AS{} does not exist, hence no name".format(q.asn))
+
+    q = Response()
+    q.getTotals()
+    if q.status_code == 200:
+        print("There are {} IPv4 prefixes and {} IPv6 prefixes in the table.".format(
+            q.total_ipv4, q.total_ipv6))
+
+    q = Response()
+    q.getInvalids()
+
+    for i in range(512):
+        inv = q.checkInvalid("{}".format(i + 1))
+        if len(inv) > 0:
+            print("AS{} is originating {} ROA invalid prefixes".format(i+1, len(inv)))
+
+    for asn in asns:
+        q = Response()
+        q.asn = asn
+        q.getSourced()
+        if q.status_code != 200:
+            print("{} for {}".format(q.status, q.asn))
+            continue
+        if q.exists:
+            print("AS{} is sourcing {} prefixes".format(q.asn, len(q.sourced)))
+        else:
+            print("AS{} does not exist, hence not sourcing any prefixes".format(q.asn))
