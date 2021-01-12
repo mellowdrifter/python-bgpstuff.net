@@ -1,22 +1,36 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 
 import requests
 import json
 from http.client import responses
 from ratelimit import limits, sleep_and_retry
-from typing import Dict, List
-
-baseURL = "https://test.bgpstuff.net"
+from typing import Dict, List, Mapping
 
 
 class Response:
+    """Class Response is an object with all the required methods to
+    interact with the REST API portions of bgpstuff.net. The class
+    should be reused as it has a built in rate-limiter as long as
+    you use the same object"""
+
+    def __init__(self, baseURL=None):
+        if baseURL is None:
+            self._baseurl = "https://test.bgpstuff.net"
+        else:
+            self._baseurl = baseURL
+
+    @property
+    def baseURL(self) -> str:
+        return self._baseurl
 
     @property
     def ip(self) -> str:
         return self._ip
 
     @ip.setter
-    def ip(self, ip):
+    def ip(self, ip: str):
         self._ip = ip
 
     @property
@@ -24,7 +38,7 @@ class Response:
         return self._asn
 
     @asn.setter
-    def asn(self, asn):
+    def asn(self, asn: int):
         self._asn = asn
 
     @property
@@ -36,7 +50,7 @@ class Response:
         return self._code
 
     @status_code.setter
-    def status_code(self, code):
+    def status_code(self, code: int):
         self._code = code
 
     @property
@@ -44,7 +58,7 @@ class Response:
         return self._exists
 
     @exists.setter
-    def exists(self, exists):
+    def exists(self, exists: bool):
         self._exists = exists
 
     @property
@@ -52,7 +66,7 @@ class Response:
         return self._route
 
     @route.setter
-    def route(self, route):
+    def route(self, route: str):
         self._route = route
 
     def getRoute(self):
@@ -62,11 +76,11 @@ class Response:
         self.route = resp.json()['Response']['Route']
 
     @property
-    def origin(self) -> str:
+    def origin(self) -> int:
         return self._origin
 
     @origin.setter
-    def origin(self, origin):
+    def origin(self, origin: int):
         self._origin = origin
 
     def getOrigin(self):
@@ -80,7 +94,7 @@ class Response:
         return self._as_path
 
     @as_path.setter
-    def as_path(self, as_path):
+    def as_path(self, as_path: str):
         self._as_path = as_path
 
     @property
@@ -88,7 +102,7 @@ class Response:
         return self._as_set
 
     @as_set.setter
-    def as_set(self, as_set):
+    def as_set(self, as_set: List[str]):
         self._as_set = as_set
 
     def full_as_path(self) -> str:
@@ -114,7 +128,7 @@ class Response:
         return self._roa
 
     @roa.setter
-    def roa(self, roa):
+    def roa(self, roa: str):
         self._roa = roa
 
     def getROA(self):
@@ -128,7 +142,7 @@ class Response:
         return self._asname
 
     @asname.setter
-    def asname(self, asname):
+    def asname(self, asname: str):
         self._asname = asname
 
     def getASName(self):
@@ -142,7 +156,7 @@ class Response:
         return self._total_ipv4
 
     @total_ipv4.setter
-    def total_ipv4(self, count):
+    def total_ipv4(self, count: int):
         self._total_ipv4 = count
 
     @property
@@ -150,7 +164,7 @@ class Response:
         return self._total_ipv6
 
     @total_ipv6.setter
-    def total_ipv6(self, count):
+    def total_ipv6(self, count: int):
         self._total_ipv6 = count
 
     def getTotals(self):
@@ -165,7 +179,7 @@ class Response:
         return self._invalids
 
     @invalids.setter
-    def invalids(self, invalids):
+    def invalids(self, invalids: Mapping):
         self._invalids = invalids
 
     def checkInvalid(self, asn) -> List:
@@ -186,24 +200,26 @@ class Response:
         return self._sourced
 
     @sourced.setter
-    def sourced(self, sourced):
+    def sourced(self, sourced: List[str]):
         self._sourced = sourced
 
     def getSourced(self):
         resp = self.__getRequest("/sourced/{}".format(self.asn))
         if self.status_code != 200:
             return
+        self.sourced = resp.json()['Response']['Sourced']['Prefixes']
 
     @sleep_and_retry
     @limits(calls=20, period=60)
     def __getRequest(self, url):
-        resp = requests.get(baseURL + url, headers=getJSONHeader())
+        # Set False initially so that only the call sets True.
+        self.exists = False
+        resp = requests.get(self.baseURL + url, headers=getJSONHeader())
         self.status_code = resp.status_code
         if self.status_code != 200:
             return
-        self.sourced = resp.json()['Response']['Sourced']['Prefixes']
 
-        #print(json.dumps(resp.json(), indent=4))
+        print(json.dumps(resp.json(), indent=4))
         self.exists = resp.json()['Response']['Exists']
         return resp
 
