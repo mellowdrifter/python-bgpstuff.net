@@ -219,7 +219,7 @@ class Response:
         if self.status_code != 200:
             return
 
-        print(json.dumps(resp.json(), indent=4))
+        #print(json.dumps(resp.json(), indent=4))
         self.exists = resp.json()['Response']['Exists']
         return resp
 
