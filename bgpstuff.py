@@ -146,7 +146,7 @@ class Response:
         '''Gets the origin ASPath for the IP and sets it to the
         self.as_path attribute, and gets the AS SET and sets it
         to the self.as_set attribute.
-        
+
         Args:
             None
 
@@ -170,7 +170,7 @@ class Response:
     def getROA(self):
         '''Gets the ROA status for the IP and sets it to the self.roa
         attribute.
-        
+
         Args:
             None
 
@@ -193,7 +193,7 @@ class Response:
     def getASName(self):
         '''Gets the ASN Name for the self.asn attribute and sets it to
         the self.asname attribute.
-        
+
         Args:
             None
 
@@ -224,7 +224,7 @@ class Response:
     def getTotals(self):
         '''Gets the total number of routes on the collector and sets it
         to the self.total_ipv[4|6] attribute.
-        
+
         Args:
             None
 
@@ -251,7 +251,7 @@ class Response:
     def getInvalids(self):
         '''Gets all Invalid prefixes from the Collector and sets them
         to the self.invalids attribute.
-        
+
         Args:
             None
 
@@ -278,7 +278,7 @@ class Response:
     def getSourced(self):
         '''Gets the prefixes sourced by the ASN in self.asn. Sets the
         self.sourced attrivute to a list of sourced prefixes.
-        
+
         Args:
             None
 
@@ -294,7 +294,7 @@ class Response:
     @limits(calls=30, period=60)
     def __getRequest(self, url):
         '''Performs an HTTP GET on a given URL and returns the response.
-        
+
         Args:
             url (str): The REST endpoint to get. 
 
@@ -303,7 +303,7 @@ class Response:
         '''
         # Set False initially so that only the call sets True.
         self.exists = False
-        resp = requests.get(self.baseURL + url, headers=getJSONHeader())
+        resp = requests.get(self.baseURL + url, headers=getRequestHeaders())
         self.status_code = resp.status_code
         if self.status_code != 200:
             return
@@ -317,16 +317,21 @@ class Response:
         return resp
 
 
-def getJSONHeader():
+def getRequestHeaders() -> Dict:
     '''Returns the HTTP Header Parameters
-        
+
         Args:
             None
 
         Returns:
-            header (dict): The HTTP Headers in dictionary format.
+            header (dict): The HTTP Headers, including both
+            setting the request to json and setting the
+            user agent.
     '''
-    return {'Content-Type': 'application/json'}
+    return {
+        'Content-Type': 'application/json',
+        'User-Agent': 'python-bgpstuff.net/x.x.x',
+    }
 
 
 if __name__ == "__main__":
