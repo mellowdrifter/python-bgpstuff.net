@@ -78,6 +78,15 @@ class Response:
         self._route = route
 
     def getRoute(self):
+        '''Gets the route prefix for the IP and sets it to the 
+        self.route attribute.
+
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/route/" + self.ip)
         if self.status_code != 200:
             return
@@ -92,6 +101,15 @@ class Response:
         self._origin = origin
 
     def getOrigin(self):
+        '''Gets the origin ASN for the IP and sets it to the
+        self.origin attribute.
+
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/origin/" + self.ip)
         if self.status_code != 200:
             return
@@ -125,6 +143,16 @@ class Response:
         return path
 
     def getASPath(self):
+        '''Gets the origin ASPath for the IP and sets it to the
+        self.as_path attribute, and gets the AS SET and sets it
+        to the self.as_set attribute.
+        
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/aspath/" + self.ip)
         if self.status_code != 200:
             return
@@ -140,6 +168,15 @@ class Response:
         self._roa = roa
 
     def getROA(self):
+        '''Gets the ROA status for the IP and sets it to the self.roa
+        attribute.
+        
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/roa/" + self.ip)
         if self.status_code != 200:
             return
@@ -154,6 +191,15 @@ class Response:
         self._asname = asname
 
     def getASName(self):
+        '''Gets the ASN Name for the self.asn attribute and sets it to
+        the self.asname attribute.
+        
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/asname/{}".format(self.asn))
         if self.status_code != 200:
             return
@@ -176,6 +222,15 @@ class Response:
         self._total_ipv6 = count
 
     def getTotals(self):
+        '''Gets the total number of routes on the collector and sets it
+        to the self.total_ipv[4|6] attribute.
+        
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/totals/")
         if self.status_code != 200:
             return
@@ -194,6 +249,15 @@ class Response:
         return self._invalids.get(asn, [])
 
     def getInvalids(self):
+        '''Gets all Invalid prefixes from the Collector and sets them
+        to the self.invalids attribute.
+        
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/invalids/")
         if self.status_code != 200:
             return
@@ -212,6 +276,15 @@ class Response:
         self._sourced = sourced
 
     def getSourced(self):
+        '''Gets the prefixes sourced by the ASN in self.asn. Sets the
+        self.sourced attrivute to a list of sourced prefixes.
+        
+        Args:
+            None
+
+        Returns:
+            None
+        '''
         resp = self.__getRequest("/sourced/{}".format(self.asn))
         if self.status_code != 200:
             return
@@ -220,6 +293,14 @@ class Response:
     @sleep_and_retry
     @limits(calls=30, period=60)
     def __getRequest(self, url):
+        '''Performs an HTTP GET on a given URL and returns the response.
+        
+        Args:
+            url (str): The REST endpoint to get. 
+
+        Returns:
+            resp (json): The JSON returned from the REST endpoint.
+        '''
         # Set False initially so that only the call sets True.
         self.exists = False
         resp = requests.get(self.baseURL + url, headers=getJSONHeader())
@@ -237,6 +318,14 @@ class Response:
 
 
 def getJSONHeader():
+    '''Returns the HTTP Header Parameters
+        
+        Args:
+            None
+
+        Returns:
+            header (dict): The HTTP Headers in dictionary format.
+    '''
     return {'Content-Type': 'application/json'}
 
 
