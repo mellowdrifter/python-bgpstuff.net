@@ -17,7 +17,7 @@ class Response:
 
     def __init__(self, baseURL=None):
         if baseURL is None:
-            self._baseurl = "https://test.bgpstuff.net"
+            self._baseurl = "https://bgpstuff.net"
         else:
             self._baseurl = baseURL
 
@@ -52,6 +52,14 @@ class Response:
     @status_code.setter
     def status_code(self, code: int):
         self._code = code
+
+    @property
+    def request_id(self) -> str:
+        return self._id
+
+    @request_id.setter
+    def request_id(self, id: str):
+        self._id = id
 
     @property
     def exists(self) -> bool:
@@ -210,7 +218,7 @@ class Response:
         self.sourced = resp.json()['Response']['Sourced']['Prefixes']
 
     @sleep_and_retry
-    @limits(calls=20, period=60)
+    @limits(calls=30, period=60)
     def __getRequest(self, url):
         # Set False initially so that only the call sets True.
         self.exists = False
@@ -218,6 +226,10 @@ class Response:
         self.status_code = resp.status_code
         if self.status_code != 200:
             return
+
+        # Grab the request ID
+        # TODO: request_id should come even if there is a server error, if server is reachable!
+        self.request_id = resp.json()['ID']
 
         #print(json.dumps(resp.json(), indent=4))
         self.exists = resp.json()['Response']['Exists']
@@ -241,6 +253,7 @@ if __name__ == "__main__":
             continue
         if q.exists:
             print("The route for {} is {}".format(q.ip, q.route))
+            print("The request ID was {}".format(q.request_id))
         else:
             print("route does not exist for " + q.ip)
 
