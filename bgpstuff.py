@@ -304,7 +304,6 @@ class Response:
         # Reset exists and statuses as the query will fill these with new values.
         self.exists = False
         self.status_code = 0
-        self.status = ""
 
         resp = requests.get(self.baseURL + url, headers=getRequestHeaders())
         self.status_code = resp.status_code
