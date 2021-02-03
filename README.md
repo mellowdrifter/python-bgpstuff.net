@@ -7,27 +7,18 @@ python-bgpstuff.net is a Python library that can access the farious functions on
 
 ## Simple demo
 ```>>> import bgpstuff
->>> q = bgpstuff.Response()
->>> q.ip = "4.2.2.1"
->>> q.getRoute()
->>> if q.status_code == 200 and q.exists:
-...     print("The route for {} is {}".format(q.ip, q.route))
-... 
-The route for 4.2.2.1 is 4.0.0.0/9
+>>> q = bgpstuff.Client()
+>>> q.get_route("4.2.2.1")
+'4.0.0.0/9'
 
->>> q.asn = 3356
->>> q.getASName()
->>> if q.status_code == 200 and q.exists:
-...     print("The asname for {} is {}".format(q.asn, q.asname))
-... 
-The asname for 3356 is LEVEL3
+>>> q.get_as_name("3356")
+'LEVEL3'
 
->>> q.getTotals()
->>> if q.status_code == 200:
-...     print("There are {} IPv4 prefixes and {} IPv6 prefixes in the table.".format(
-...         q.total_ipv4, q.total_ipv6))
-... 
-There are 846425 IPv4 prefixes and 106110 IPv6 prefixes in the table.
+
+>>> q.get_totals(4)
+844983
+>>> q.get_totals(6)
+106698
 ```
 
 ## Notes
@@ -39,19 +30,21 @@ While you could change this in the code, if you do that I'll permananly ban your
 Each response object has a built in rate-limiter. This means as long as you reuse that single response object in your code, you can use it's built-in rate-limiter.
 #### Good
 ```
->>> q = bgpstuff.Response()
->>> for i in range(10):
-...     q.ip = "{}.1.1.1".format(i+1)
-...     q.getRoute()
-...     if q.status_code == 200 and q.exists:
-...             print("The route for {} is {}".format(q.ip, q.route))
+>>> q = bgpstuff.Client()
+>>> for i in range(3):
+...     q.get_route("{}.1.1.1".format(i+1))
+... 
+'1.1.1.0/24'
+'2.1.0.0/16'
+'3.0.0.0/15'
 ```
 #### BAD
 ```
->>> for i in range(10):
-...     q = bgpstuff.Response()
-...     q.ip = "{}.1.1.1".format(i+1)
-...     q.getRoute()
-...     if q.status_code == 200 and q.exists:
-...             print("The route for {} is {}".format(q.ip, q.route))
+>>> for i in range(3):
+>>> q = bgpstuff.Client()
+...     q.get_route("{}.1.1.1".format(i+1))
+... 
+'1.1.1.0/24'
+'2.1.0.0/16'
+'3.0.0.0/15'
 ```
