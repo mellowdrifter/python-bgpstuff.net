@@ -215,11 +215,25 @@ class Client:
             asn (str): The ASN to lookup.
 
         Returns:
+<<<<<<< HEAD
             sourced_prefixes (list): List of prefixes originated.
         TODO: Add function to validate ASN
         """
         endpoint = "invalids"
         resp = self._bgpstuff_request(f"{endpoint}/")
+=======
+            resp (json): The JSON returned from the REST endpoint.
+        '''
+        # Reset exists and statuses as the query will fill these with new values.
+        self.exists = False
+        self.status_code = 0
+        self.status = ""
+
+        resp = requests.get(self.baseURL + url, headers=getRequestHeaders())
+        self.status_code = resp.status_code
+        if self.status_code != 200:
+            return
+>>>>>>> upstream/main
 
         invalid_list = resp["Response"]["Invalids"]
 
