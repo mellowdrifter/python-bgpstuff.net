@@ -41,7 +41,7 @@ Each response object has a built in rate-limiter. This means as long as you reus
 #### BAD
 ```
 >>> for i in range(3):
->>> q = bgpstuff.Client()
+...     q = bgpstuff.Client()
 ...     q.get_route("{}.1.1.1".format(i+1))
 ... 
 '1.1.1.0/24'
