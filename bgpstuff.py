@@ -301,8 +301,11 @@ class Response:
         Returns:
             resp (json): The JSON returned from the REST endpoint.
         '''
-        # Set False initially so that only the call sets True.
+        # Reset exists and statuses as the query will fill these with new values.
         self.exists = False
+        self.status_code = 0
+        self.status = ""
+
         resp = requests.get(self.baseURL + url, headers=getRequestHeaders())
         self.status_code = resp.status_code
         if self.status_code != 200:
