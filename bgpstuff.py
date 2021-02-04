@@ -4,6 +4,7 @@
 """
 import ipaddress
 import requests
+from http.client import responses
 from ratelimit import limits, sleep_and_retry
 
 
@@ -35,6 +36,37 @@ class Client:
         session.headers.update(self.session_headers)
 
         return session
+
+    def _close_session(self):
+        self.session.close()
+
+    @property
+    def status(self) -> str:
+        return responses[self.status_code]
+
+    @property
+    def status_code(self) -> int:
+        return self.status_code
+
+    @status_code.setter
+    def status_code(self, code: int):
+        self._code = code
+
+    @property
+    def request_id(self) -> str:
+        return self._id
+
+    @request_id.setter
+    def request_id(self, id: str):
+        self._id = id
+
+    @property
+    def route(self) -> str:
+        return self._route
+
+    @route.setter
+    def route(self, route: str):
+        self._route = route
 
     @sleep_and_retry
     @limits(calls=30, period=60)
@@ -78,9 +110,7 @@ class Client:
         endpoint = "route"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        route = resp["Response"]["Route"]
-
-        return route
+        self.route = resp["Response"]["Route"]
 
     def get_origin(self, ip_address):
         """Gets the origin AS for the given IP address.
