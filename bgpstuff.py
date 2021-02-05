@@ -6,6 +6,7 @@ import ipaddress
 import requests
 from http.client import responses
 from ratelimit import limits, sleep_and_retry
+from typing import List
 
 
 class BGPStuffError(Exception):
@@ -29,6 +30,13 @@ class Client:
             'User-Agent': 'python-bgpstuff.net/x.x.x',
         }
         self.session = self._get_session()
+        self._status_code = None
+        self._id = None
+        self._route = None
+        self._origin = None
+        self._as_path = None
+        self._as_set = None
+        self._roa = None
 
     def _get_session(self):
         """Make a requests session object with the proper headers."""
@@ -46,11 +54,11 @@ class Client:
 
     @property
     def status_code(self) -> int:
-        return self.status_code
+        return self._status_code
 
     @status_code.setter
     def status_code(self, code: int):
-        self._code = code
+        self._status_code = code
 
     @property
     def request_id(self) -> str:
@@ -67,6 +75,40 @@ class Client:
     @route.setter
     def route(self, route: str):
         self._route = route
+
+    @property
+    def origin(self) -> int:
+        return self._origin
+
+    @origin.setter
+    def origin(self, origin: str):
+        self._origin = int(origin)
+
+    @property
+    def as_path(self) -> List[int]:
+        return self._as_path
+
+    @as_path.setter
+    def as_path(self, path: List[str]):
+        if path:
+            self._as_path = list(map(int, path))
+
+    @property
+    def as_set(self) -> List[int]:
+        return self._as_set
+
+    @as_set.setter
+    def as_set(self, path: List[str]):
+        if path:
+            self._as_set = list(map(int, path))
+
+    @property
+    def roa(self) -> str:
+        return self._roa
+
+    @roa.setter
+    def roa(self, roa: str):
+        self._roa = roa
 
     @sleep_and_retry
     @limits(calls=30, period=60)
@@ -127,9 +169,7 @@ class Client:
         endpoint = "origin"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        origin = resp["Response"]["Origin"]
-
-        return origin
+        self.origin = resp["Response"]["Origin"]
 
     def get_as_path(self, ip_address):
         """Gets the AS_PATH to the given IP address.
@@ -146,28 +186,8 @@ class Client:
         endpoint = "aspath"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        as_path = resp["Response"]["ASPath"]
-
-        return as_path
-
-    def get_as_set(self, ip_address):
-        """Gets the AS_SET of the route/prefix containing the given IP address.
-
-        Args:
-            ip_address (str): The IP address to lookup.
-
-        Returns:
-            as_set (str): The AS_PATH to the prefix this IP belongs to.
-        TODO: Combine with self.get_as_path()
-        """
-        _validate_ip(ip_address)
-
-        endpoint = "aspath"
-        resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
-
-        as_set = resp["Response"]["ASSet"]
-
-        return as_set
+        self.as_path = resp["Response"]["ASPath"]
+        self.as_set = resp["Response"]["ASSet"]
 
     def get_roa(self, ip_address):
         """Gets the ROA of the route/prefix containing the given IP address.
@@ -184,9 +204,7 @@ class Client:
         endpoint = "roa"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        roa = resp["Response"]["ROA"]
-
-        return roa
+        self.roa = resp["Response"]["ROA"]
 
     def get_as_name(self, asn):
         """Gets the name of the given ASN.
@@ -292,98 +310,3 @@ def _validate_ip(ip_address):
 
 if __name__ == "__main__":
     raise BGPStuffError("This is a library, please do not run directly.")
-
-
-# if __name__ == "__main__":
-#     ips = ["1.1.1.1", "4.2.2.1", "123.1.204.0",
-#            "11.1.1.1", "10.0.0.0", "2600::", "50.114.112.0"]
-#     asns = [123, 3356, 15169, 66000, 3049573045]
-#     for ip in ips:
-#         q = Response()
-#         q.ip = ip
-#         q.getRoute()
-#         if q.status_code != 200:
-#             print("{} for {}".format(q.status, q.ip))
-#             continue
-#         if q.exists:
-#             print("The route for {} is {}".format(q.ip, q.route))
-#             print("The request ID was {}".format(q.request_id))
-#         else:
-#             print("route does not exist for " + q.ip)
-
-#     for ip in ips:
-#         q = Response()
-#         q.ip = ip
-#         q.getOrigin()
-#         if q.status_code != 200:
-#             print("{} for {}".format(q.status, q.ip))
-#             continue
-#         if q.exists:
-#             print("The origin for " + q.ip + " is " + q.origin)
-#         else:
-#             print("route does not exist for " + q.ip +
-#                   " so unable to check the origin")
-
-#     for ip in ips:
-#         q = Response()
-#         q.ip = ip
-#         q.getASPath()
-#         if q.status_code != 200:
-#             print("{} for {}".format(q.status, q.ip))
-#             continue
-#         if q.exists:
-#             print("The aspath for {} is {}".format(q.ip, q.full_as_path()))
-#         else:
-#             print("route does not exist for " + q.ip +
-#                   " so unable to check the aspath")
-
-#     for ip in ips:
-#         q = Response()
-#         q.ip = ip
-#         q.getROA()
-#         if q.status_code != 200:
-#             print("{} for {}".format(q.status, q.ip))
-#             continue
-#         if q.exists:
-#             print("The roa for {} is {}".format(q.ip, q.roa))
-#         else:
-#             print("route does not exist for " + q.ip +
-#                   " so unable to check the roa")
-
-#     for asn in asns:
-#         q = Response()
-#         q.asn = asn
-#         q.getASName()
-#         if q.status_code != 200:
-#             print("{} for {}".format(q.status, q.asn))
-#             continue
-#         if q.exists:
-#             print("The asname for {} is {}".format(q.asn, q.asname))
-#         else:
-#             print("AS{} does not exist, hence no name".format(q.asn))
-
-#     q = Response()
-#     q.getTotals()
-#     if q.status_code == 200:
-#         print("There are {} IPv4 prefixes and {} IPv6 prefixes in the table.".format(
-#             q.total_ipv4, q.total_ipv6))
-
-#     q = Response()
-#     q.getInvalids()
-
-#     for i in range(512):
-#         inv = q.checkInvalid("{}".format(i + 1))
-#         if len(inv) > 0:
-#             print("AS{} is originating {} ROA invalid prefixes".format(i+1, len(inv)))
-
-#     for asn in asns:
-#         q = Response()
-#         q.asn = asn
-#         q.getSourced()
-#         if q.status_code != 200:
-#             print("{} for {}".format(q.status, q.asn))
-#             continue
-#         if q.exists:
-#             print("AS{} is sourcing {} prefixes".format(q.asn, len(q.sourced)))
-#         else:
-#             print("AS{} does not exist, hence not sourcing any prefixes".format(q.asn))
