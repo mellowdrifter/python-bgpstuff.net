@@ -31,5 +31,16 @@ class ClientTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.client.get_route("10.0.0.0")
 
+    def test_get_roa(self):
+        self.client.get_as_name(15169)
+        self.assertEqual("GOOGLE", self.client.as_name)
+        with self.assertRaises(ValueError):
+            self.client.get_route("hi")
+
+    def test_get_totals(self):
+        self.client.get_totals()
+        self.assertGreater(self.client.total_v4, 800000)
+        self.assertGreater(self.client.total_v6, 100000)
+
     def tearDown(self):
         self.client._close_session()

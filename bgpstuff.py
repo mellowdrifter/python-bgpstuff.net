@@ -34,9 +34,12 @@ class Client:
         self._id = None
         self._route = None
         self._origin = None
+        self._as_name = None
         self._as_path = None
         self._as_set = None
         self._roa = None
+        self._total_v4 = None
+        self._total_v6 = None
 
     def _get_session(self):
         """Make a requests session object with the proper headers."""
@@ -109,6 +112,30 @@ class Client:
     @roa.setter
     def roa(self, roa: str):
         self._roa = roa
+
+    @property
+    def as_name(self) -> str:
+        return self._as_name
+
+    @as_name.setter
+    def as_name(self, as_name: str):
+        self._as_name = as_name
+
+    @property
+    def total_v4(self) -> int:
+        return self._total_v4
+
+    @total_v4.setter
+    def total_v4(self, total: str):
+        self._total_v4 = int(total)
+
+    @property
+    def total_v6(self) -> int:
+        return self._total_v6
+
+    @total_v6.setter
+    def total_v6(self, total: str):
+        self._total_v6 = int(total)
 
     @sleep_and_retry
     @limits(calls=30, period=60)
@@ -218,7 +245,6 @@ class Client:
 
         Returns:
             as_name (str): The name of the given ASN.
-        TODO: Add function to validate ASN
         """
         if not bogons.valid_public_asn(asn):
             raise ValueError(f"{asn} is not a valid ASN")
@@ -226,9 +252,7 @@ class Client:
         endpoint = "asname"
         resp = self._bgpstuff_request(f"{endpoint}/{asn}")
 
-        as_name = resp["Response"]["ASName"]
-
-        return as_name
+        self.as_name = resp["Response"]["ASName"]
 
     def get_sourced_prefixes(self, asn: int):
         """Gets a list of prefixes sourced by the given ASN.
@@ -258,13 +282,15 @@ class Client:
             None
 
         Returns:
+        #TODO: All these returns are not returns, just setting state
             total_v4 (int): Total number of IPv4 prefixes
             total_v6 (int): Total number of IPv6 prefixes
         """
         endpoint = "totals"
         resp = self._bgpstuff_request(f"{endpoint}")
 
-        return resp["Response"]["Totals"]["Ipv4"], resp["Response"]["Totals"]["Ipv6"]
+        self.total_v4 = resp["Response"]["Totals"]["Ipv4"]
+        self.total_v6 = resp["Response"]["Totals"]["Ipv6"]
 
     def get_invalids(self, asn: int):
         """Gets a list of all invalid prefixes observed by the BGPStuff
