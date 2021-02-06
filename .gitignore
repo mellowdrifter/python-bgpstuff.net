@@ -2,3 +2,6 @@ venv/
 .vscode/
 __pycache__/
 bogons.py
+*.egg-info
+build/
+dist/
