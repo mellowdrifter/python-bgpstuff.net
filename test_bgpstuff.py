@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import bgpstuff
+import ipaddress
 import unittest
 
 
@@ -11,7 +12,11 @@ class ClientTest(unittest.TestCase):
 
     def test_get_route(self):
         self.client.get_route("8.8.8.8")
-        self.assertEqual("8.8.8.0/24", self.client.route)
+        self.assertEqual(ipaddress.ip_network(
+            '8.8.8.0/24'), self.client.route)
+        self.client.get_route("2600::")
+        self.assertEqual(ipaddress.ip_network(
+            '2600::/48'), self.client.route)
         with self.assertRaises(ValueError):
             self.client.get_route("10.0.0.0")
 
@@ -31,7 +36,7 @@ class ClientTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.client.get_route("10.0.0.0")
 
-    def test_get_roa(self):
+    def test_as_name(self):
         self.client.get_as_name(15169)
         self.assertEqual("GOOGLE", self.client.as_name)
         with self.assertRaises(ValueError):

@@ -3,6 +3,7 @@
 """Python client for the BGPStuff.net API.
 """
 import bogons
+import ipaddress
 import requests
 from http.client import responses
 from ratelimit import limits, sleep_and_retry
@@ -72,12 +73,15 @@ class Client:
         self._id = id
 
     @property
-    def route(self) -> str:
+    def route(self) -> ipaddress:
         return self._route
 
     @route.setter
     def route(self, route: str):
-        self._route = route
+        try:
+            self._route = ipaddress.ip_network(route)
+        except:
+            raise
 
     @property
     def origin(self) -> int:
