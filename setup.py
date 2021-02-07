@@ -25,6 +25,6 @@ setuptools.setup(
         "License :: OSI Approved :: Apache 2.0 License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["ratelimit", "requests"],
+    install_requires=["ipaddress", "ratelimit", "requests"],
     python_requires=">=3.6",
 )
