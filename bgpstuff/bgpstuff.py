@@ -10,6 +10,9 @@ from ratelimit import limits, sleep_and_retry
 from typing import List, Tuple
 
 
+_version = "0.0.1"
+
+
 class BGPStuffError(Exception):
     """GenericError Class for all BGPStuff Client Errors."""
 
@@ -28,7 +31,7 @@ class Client:
         self.url = url
         self.session_headers = {
             'Content-Type': 'application/json',
-            'User-Agent': 'python-bgpstuff.net/x.x.x',
+            'User-Agent': f'python-bgpstuff.net/{_version}',
         }
         self.session = self._get_session()
         self._status_code = None
@@ -41,6 +44,7 @@ class Client:
         self._roa = None
         self._total_v4 = None
         self._total_v6 = None
+        self._sourced = None
 
     def _get_session(self):
         """Make a requests session object with the proper headers."""
@@ -73,7 +77,7 @@ class Client:
         self._id = id
 
     @property
-    def route(self) -> ipaddress:
+    def route(self) -> ipaddress.ip_network:
         return self._route
 
     @route.setter
@@ -140,6 +144,20 @@ class Client:
     @total_v6.setter
     def total_v6(self, total: str):
         self._total_v6 = int(total)
+
+    @property
+    def sourced(self) -> List[ipaddress.ip_network]:
+        return self._sourced
+
+    @sourced.setter
+    def sourced(self, prefixes: List[str]):
+        self._sourced = []
+        for prefix in prefixes:
+            try:
+                net = ipaddress.ip_network(prefix)
+            except:
+                raise
+            self._sourced.append(net)
 
     @sleep_and_retry
     @limits(calls=30, period=60)
@@ -245,7 +263,7 @@ class Client:
         """Gets the name of the given ASN.
 
         Args:
-            asn (str): The ASN to lookup.
+            asn (int): The ASN to lookup.
 
         Returns:
             as_name (str): The name of the given ASN.
@@ -262,11 +280,10 @@ class Client:
         """Gets a list of prefixes sourced by the given ASN.
 
         Args:
-            asn (str): The ASN to lookup.
+            asn (int): The ASN to lookup.
 
         Returns:
             sourced_prefixes (list): List of prefixes originated.
-        TODO: Add function to validate ASN
         """
         if not bogons.valid_public_asn(asn):
             raise ValueError(f"{asn} is not a valid ASN")
@@ -274,9 +291,7 @@ class Client:
         endpoint = "sourced"
         resp = self._bgpstuff_request(f"{endpoint}/{asn}")
 
-        sourced_prefixes = resp["Response"]["Sourced"]["Prefixes"]
-
-        return sourced_prefixes
+        self.sourced = resp["Response"]["Sourced"]["Prefixes"]
 
     def get_totals(self) -> Tuple[int, int]:
         """Gets the total number of prefixes seen by the collector for the

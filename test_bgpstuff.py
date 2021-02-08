@@ -42,6 +42,14 @@ class ClientTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.client.get_route("hi")
 
+    def test_get_sourced_prefixes(self):
+        self.client.get_sourced_prefixes(15169)
+        dns = ipaddress.ip_network("8.8.4.0/24")
+        if dns not in self.client.sourced:
+            self.assert_("8.8.4.0/24 network not found")
+        with self.assertRaises(ValueError):
+            self.client.get_sourced_prefixes("hi")
+
     def test_get_totals(self):
         self.client.get_totals()
         self.assertGreater(self.client.total_v4, 800000)
