@@ -26,5 +26,10 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=["ratelimit", "requests"],
+    entry_points={
+        "console_scripts": [
+            "bgpstuff = bgpstuff.cli:cli",
+        ],
+    },
     python_requires=">=3.6",
 )
