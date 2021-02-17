@@ -25,6 +25,6 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["ipaddress", "ratelimit", "requests", "bogons"],
+    install_requires=["bogons", "ipaddress", "ratelimit", "requests"],
     python_requires=">=3.6",
 )
