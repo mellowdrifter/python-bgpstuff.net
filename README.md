@@ -3,22 +3,14 @@
 python-bgpstuff.net is a Python library that can access the farious functions on [bgpstuff.net](bgpstuff.net).
 
 ## Requirements
-```pip install ratelimit requests```
+```pip install bgpstuff```
 
 ## Simple demo
 ```>>> import bgpstuff
 >>> q = bgpstuff.Client()
 >>> q.get_route("4.2.2.1")
-'4.0.0.0/9'
-
->>> q.get_as_name("3356")
-'LEVEL3'
-
-
->>> q.get_totals(4)
-844983
->>> q.get_totals(6)
-106698
+>>> print(f"The route for 4.2.2.1 is {c.route}")
+>>> The route for 4.2.2.1 is 4.0.0.0/9
 ```
 
 ## Notes
