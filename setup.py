@@ -11,7 +11,7 @@ with open(f"{here}/README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="bgpstuff",
-    version="0.0.1",
+    version="1.0.0",
     author="Darren O'Connor",
     author_email="nouser@bgpstuff.net",
     description="Python Client for Connecting to BGPStuff.net",
@@ -22,9 +22,9 @@ setuptools.setup(
     license="Apache Software License (http://www.apache.org/licenses/LICENSE-2.0)",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: Apache 2.0 License",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["ipaddress", "ratelimit", "requests"],
+    install_requires=["ipaddress", "ratelimit", "requests", "bogons"],
     python_requires=">=3.6",
 )

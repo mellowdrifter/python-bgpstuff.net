@@ -22,29 +22,9 @@ python-bgpstuff.net is a Python library that can access the farious functions on
 ```
 
 ## Notes
-The library has a built in rate limiter to limit 20 requests per minute. If you go over this limit the application will sleep until there is more available requests.
+The library has a built in rate limiter to limit 30 requests per minute. If you go over this limit the application will sleep until there is more available requests.
 
 While you could change this in the code, if you do that I'll permananly ban your source IPs.
 
-### Reuse, do not recreate
-Each response object has a built in rate-limiter. This means as long as you reuse that single response object in your code, you can use it's built-in rate-limiter.
-#### Good
-```
->>> q = bgpstuff.Client()
->>> for i in range(3):
-...     q.get_route("{}.1.1.1".format(i+1))
-... 
-'1.1.1.0/24'
-'2.1.0.0/16'
-'3.0.0.0/15'
-```
-#### BAD
-```
->>> for i in range(3):
-...     q = bgpstuff.Client()
-...     q.get_route("{}.1.1.1".format(i+1))
-... 
-'1.1.1.0/24'
-'2.1.0.0/16'
-'3.0.0.0/15'
-```
+### Documentation
+Documentation for installation and all the methods can be found at [https://dev.bgpstuff.net/](https://dev.bgpstuff.net/)

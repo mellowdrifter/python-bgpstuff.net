@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Python client for the BGPStuff.net API.
+"""Python client for the BGPStuff.net REST API.
 """
 import bogons
 import ipaddress
 import requests
 from http.client import responses
 from ratelimit import limits, sleep_and_retry
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
-_version = "0.0.1"
+_version = "1.0.0"
 
 
 class BGPStuffError(Exception):
@@ -45,6 +45,8 @@ class Client:
         self._total_v4 = None
         self._total_v6 = None
         self._sourced = None
+        self._all_invalids = None
+        self._exists = False
 
     def _get_session(self):
         """Make a requests session object with the proper headers."""
@@ -54,6 +56,7 @@ class Client:
         return session
 
     def _close_session(self):
+        """Closes a session"""
         self.session.close()
 
     @property
@@ -69,6 +72,17 @@ class Client:
         self._status_code = code
 
     @property
+    def exists(self) -> bool:
+        return self._exists
+
+    @exists.setter
+    def exists(self, exists: str):
+        if exists == "true":
+            self._exists = True
+        else:
+            self._exists = False
+
+    @property
     def request_id(self) -> str:
         return self._id
 
@@ -82,6 +96,9 @@ class Client:
 
     @route.setter
     def route(self, route: str):
+        # TODO: Prevent returning of this value
+        if route == "/0":
+            return
         try:
             self._route = ipaddress.ip_network(route)
         except:
@@ -159,6 +176,31 @@ class Client:
                 raise
             self._sourced.append(net)
 
+    def invalids(self, asn: int) -> List[ipaddress.ip_network]:
+        if not self._all_invalids:
+            raise BGPStuffError(
+                "call get_invalids() before calling get_invalids()")
+        if asn in self._all_invalids:
+            return self._all_invalids[asn]
+        return None
+
+    @property
+    def all_invalids(self) -> Dict:
+        return self._all_invalids
+
+    @all_invalids.setter
+    def all_invalids(self, invalids: Dict):
+        self._all_invalids = {}
+        for invalid in invalids:
+            prefixes = []
+            for prefix in invalid["Prefixes"]:
+                try:
+                    net = ipaddress.ip_network(prefix)
+                except:
+                    raise
+                prefixes.append(net)
+            self._all_invalids[int(invalid["ASN"])] = prefixes
+
     @sleep_and_retry
     @limits(calls=30, period=60)
     def _bgpstuff_request(self, endpoint: str):
@@ -166,9 +208,6 @@ class Client:
 
         Args:
             endpoint (str): The REST endpoint to query
-
-        Returns:
-            value (dict): Deserialized JSON response from BGPStuff.
         """
         # Reset exists and statuses as the query will fill these with new values.
         self.exists = False
@@ -182,19 +221,17 @@ class Client:
         except requests.exceptions.HTTPError as error:
             raise BGPStuffError from error
 
+        self._status_code = request.status_code
         value = request.json()
-        self.exists = value['Response']['Exists']
+        self._exists = value['Response']['Exists']
 
         return value
 
     def get_route(self, ip_address: str):
-        """Gets the route/prefix for the given IP address.
+        """Gets the rib entry for the given IP address.
 
         Args:
             ip_address (str): The IP address to lookup.
-
-        Returns:
-            route (str): The route/prefix that the IP belongs into.
         """
         if not bogons.is_public_ip(ip_address):
             raise ValueError(f"{ip_address} is not a public IP address")
@@ -209,10 +246,6 @@ class Client:
 
         Args:
             ip_address (str): The IP address to lookup.
-
-        Returns:
-            origin (str): The ASN originating the route/prefix this IP
-            address belongs to.
         """
         if not bogons.is_public_ip(ip_address):
             raise ValueError(f"{ip_address} is not a public IP address")
@@ -227,10 +260,6 @@ class Client:
 
         Args:
             ip_address (str): The IP address to lookup.
-
-        Returns:
-            as_path (list): The AS_PATH to the prefix this IP belongs to.
-        TODO: Combine with self.get_as_set()
         """
         if not bogons.is_public_ip(ip_address):
             raise ValueError(f"{ip_address} is not a public IP address")
@@ -246,10 +275,6 @@ class Client:
 
         Args:
             ip_address (str): The IP address to lookup.
-
-        Returns:
-            roa (str): The AS_PATH to the prefix this IP belongs to.
-        TODO: Combine with self.get_as_path()
         """
         if not bogons.is_public_ip(ip_address):
             raise ValueError(f"{ip_address} is not a public IP address")
@@ -264,9 +289,6 @@ class Client:
 
         Args:
             asn (int): The ASN to lookup.
-
-        Returns:
-            as_name (str): The name of the given ASN.
         """
         if not bogons.valid_public_asn(asn):
             raise ValueError(f"{asn} is not a valid ASN")
@@ -281,9 +303,6 @@ class Client:
 
         Args:
             asn (int): The ASN to lookup.
-
-        Returns:
-            sourced_prefixes (list): List of prefixes originated.
         """
         if not bogons.valid_public_asn(asn):
             raise ValueError(f"{asn} is not a valid ASN")
@@ -299,11 +318,6 @@ class Client:
 
         Args:
             None
-
-        Returns:
-        #TODO: All these returns are not returns, just setting state
-            total_v4 (int): Total number of IPv4 prefixes
-            total_v6 (int): Total number of IPv6 prefixes
         """
         endpoint = "totals"
         resp = self._bgpstuff_request(f"{endpoint}")
@@ -311,29 +325,22 @@ class Client:
         self.total_v4 = resp["Response"]["Totals"]["Ipv4"]
         self.total_v6 = resp["Response"]["Totals"]["Ipv6"]
 
-    def get_invalids(self, asn: int):
+    def get_invalids(self, asn: int = 0):
         """Gets a list of all invalid prefixes observed by the BGPStuff
         route collector.
 
         Args:
-            asn (str): The ASN to lookup. Using 0 means ALL ASNs.
-
-        Returns:
-            resp (json): The JSON returned from the REST endpoint.
+            asn (int): The ASN to lookup. Using 0 means ALL ASNs.
         """
-        if not bogons.valid_public_asn(asn):
-            raise ValueError(f"{asn} is not a valid ASN")
+        if asn != 0:
+            if not bogons.valid_public_asn(asn):
+                raise ValueError(f"{asn} is not a valid ASN")
 
         endpoint = "invalids"
-        resp = self._bgpstuff_request(f"{endpoint}/")
-
-        invalid_list = resp["Response"]["Invalids"]
-
-        invalids = {}
-        for invalid in invalid_list:
-            invalids[invalid["ASN"]] = invalid["Prefixes"]
-
-        return invalids
+        if asn == 0:
+            resp = self._bgpstuff_request(f"{endpoint}/")
+            self.all_invalids = resp["Response"]["Invalids"]
+            return
 
 
 if __name__ == "__main__":
