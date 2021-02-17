@@ -10,7 +10,7 @@ from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.0"
+_version = "1.0.3"
 
 
 class BGPStuffError(Exception):
@@ -35,7 +35,7 @@ class Client:
         }
         self.session = self._get_session()
         self._status_code = None
-        self._id = None
+        self._request_id = None
         self._route = None
         self._origin = None
         self._as_name = None
@@ -84,11 +84,11 @@ class Client:
 
     @property
     def request_id(self) -> str:
-        return self._id
+        return self._request_id
 
     @request_id.setter
-    def request_id(self, id: str):
-        self._id = id
+    def request_id(self, request_id: str):
+        self._request_id = request_id
 
     @property
     def route(self) -> ipaddress.ip_network:
@@ -211,6 +211,7 @@ class Client:
         """
         # Reset exists and statuses as the query will fill these with new values.
         self.exists = False
+        self.request_id = None
 
         url = f"{self.url}/{endpoint}"
 
@@ -223,6 +224,7 @@ class Client:
 
         self._status_code = request.status_code
         value = request.json()
+        self._request_id = value["ID"]
         self._exists = value['Response']['Exists']
 
         return value

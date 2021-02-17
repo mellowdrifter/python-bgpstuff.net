@@ -11,7 +11,7 @@ with open(f"{here}/README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="bgpstuff",
-    version="1.0.0",
+    version="1.0.3",
     author="Darren O'Connor",
     author_email="nouser@bgpstuff.net",
     description="Python Client for Connecting to BGPStuff.net",
