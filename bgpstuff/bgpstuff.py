@@ -4,13 +4,14 @@
 """
 import bogons
 import ipaddress
+import json
 import requests
 from http.client import responses
 from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.3"
+_version = "1.0.4"
 
 
 class BGPStuffError(Exception):
@@ -224,8 +225,10 @@ class Client:
 
         self._status_code = request.status_code
         value = request.json()
-        self._request_id = value["ID"]
-        self._exists = value['Response']['Exists']
+        if "ID" in value:
+            self._request_id = value["ID"]
+        if "Exists" in value["Response"]:
+            self._exists = value['Response']['Exists']
 
         return value
 
@@ -270,7 +273,9 @@ class Client:
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
         self.as_path = resp["Response"]["ASPath"]
-        self.as_set = resp["Response"]["ASSet"]
+
+        if "ASSet" in resp["Response"]:
+            self.as_set = resp["Response"]["ASSet"]
 
     def get_roa(self, ip_address: str):
         """Gets the ROA of the route/prefix containing the given IP address.
