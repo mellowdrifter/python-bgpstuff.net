@@ -55,5 +55,10 @@ class ClientTest(unittest.TestCase):
         self.assertGreater(self.client.total_v4, 800000)
         self.assertGreater(self.client.total_v6, 100000)
 
+    def test_get_all_as_names(self):
+        self.client.get_as_names()
+        self.assertGreater(len(self.client.all_as_names), 100000)
+        self.assertEqual("GOOGLE", self.client.all_as_names[15169])
+
     def tearDown(self):
         self.client._close_session()

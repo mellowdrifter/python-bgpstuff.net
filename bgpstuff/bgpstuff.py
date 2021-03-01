@@ -4,14 +4,13 @@
 """
 import bogons
 import ipaddress
-import json
 import requests
 from http.client import responses
 from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.4"
+_version = "1.0.6"
 
 
 class BGPStuffError(Exception):
@@ -40,6 +39,7 @@ class Client:
         self._route = None
         self._origin = None
         self._as_name = None
+        self._all_as_names = None
         self._as_path = None
         self._as_set = None
         self._roa = None
@@ -202,6 +202,16 @@ class Client:
                 prefixes.append(net)
             self._all_invalids[int(invalid["ASN"])] = prefixes
 
+    @property
+    def all_as_names(self) -> Dict:
+        return self._all_as_names
+
+    @all_as_names.setter
+    def all_as_names(self, asnames: Dict):
+        self._all_as_names = {}
+        for asn in asnames:
+            self._all_as_names[int(asn["ASN"])] = asn["ASName"]
+
     @sleep_and_retry
     @limits(calls=30, period=60)
     def _bgpstuff_request(self, endpoint: str):
@@ -300,6 +310,16 @@ class Client:
         if not bogons.valid_public_asn(asn):
             raise ValueError(f"{asn} is not a valid ASN")
 
+        # Check local all_asnames first
+        if self._all_as_names:
+            self._status_code = 200
+            if asn in self._all_as_names:
+                self.as_name = self._all_as_names[asn]
+                self.exists = True
+            else:
+                self.exists = False
+            return
+
         endpoint = "asname"
         resp = self._bgpstuff_request(f"{endpoint}/{asn}")
 
@@ -348,6 +368,18 @@ class Client:
             resp = self._bgpstuff_request(f"{endpoint}/")
             self.all_invalids = resp["Response"]["Invalids"]
             return
+
+    def get_as_names(self):
+        """Gets a list of all asnumber to asname mappings from the
+        BGPStuff route collector
+
+        Args:
+            None
+        """
+
+        endpoint = "asnames"
+        resp = self._bgpstuff_request(f"{endpoint}/")
+        self.all_as_names = resp["Response"]["ASNames"]
 
 
 if __name__ == "__main__":
