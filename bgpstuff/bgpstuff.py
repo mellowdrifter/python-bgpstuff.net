@@ -10,7 +10,7 @@ from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.6"
+_version = "1.0.7"
 
 
 class BGPStuffError(Exception):
@@ -314,10 +314,10 @@ class Client:
         if self._all_as_names:
             self._status_code = 200
             if asn in self._all_as_names:
-                self.as_name = self._all_as_names[asn]
-                self.exists = True
-            else:
-                self.exists = False
+                self._as_name = self._all_as_names[asn]
+                self._exists = True
+                return
+            self._exists = False
             return
 
         endpoint = "asname"

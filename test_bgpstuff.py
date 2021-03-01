@@ -59,6 +59,12 @@ class ClientTest(unittest.TestCase):
         self.client.get_as_names()
         self.assertGreater(len(self.client.all_as_names), 100000)
         self.assertEqual("GOOGLE", self.client.all_as_names[15169])
+        self.client.get_as_name(3356)
+        self.assertTrue(self.client.exists)
+        self.assertEqual(200, self.client.status_code)
+        self.client.get_as_name(4100000000)
+        self.assertFalse(self.client.exists)
+        self.assertEqual(200, self.client.status_code)
 
     def tearDown(self):
         self.client._close_session()
