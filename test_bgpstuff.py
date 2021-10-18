@@ -66,5 +66,16 @@ class ClientTest(unittest.TestCase):
         self.assertFalse(self.client.exists)
         self.assertEqual(200, self.client.status_code)
 
+    def test_get_vrps(self):
+        self.client.get_vrps(15169)
+        dns = ipaddress.ip_network("8.8.4.0/24")
+        if dns not in self.client.vrps:
+            self.assert_("8.8.4.0/24 vrp not found")
+        v6dns = ipaddress.ip_network("2001:4860::/32")
+        if v6dns not in self.client.vrps:
+            self.assert_("2001:4860::/32 vrp not found")
+        with self.assertRaises(ValueError):
+            self.client.get_vrps("sup")
+
     def tearDown(self):
         self.client._close_session()

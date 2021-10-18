@@ -10,7 +10,7 @@ from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.7"
+_version = "1.0.8"
 
 
 class BGPStuffError(Exception):
@@ -46,6 +46,7 @@ class Client:
         self._total_v4 = None
         self._total_v6 = None
         self._sourced = None
+        self._vrps = None
         self._all_invalids = None
         self._exists = False
 
@@ -176,6 +177,20 @@ class Client:
             except:
                 raise
             self._sourced.append(net)
+
+    @property
+    def vrps(self) -> Dict:
+        return self._vrps
+
+    @vrps.setter
+    def vrps(self, vrps: Dict):
+        self._vrps = {}
+        for vrp in vrps:
+            try:
+                net = ipaddress.ip_network(vrp["Prefix"])
+            except:
+                raise
+            self._vrps[net] = vrp["Max"]
 
     def invalids(self, asn: int) -> List[ipaddress.ip_network]:
         if not self._all_invalids:
@@ -338,6 +353,20 @@ class Client:
         resp = self._bgpstuff_request(f"{endpoint}/{asn}")
 
         self.sourced = resp["Response"]["Sourced"]["Prefixes"]
+
+    def get_vrps(self, asn: int):
+        """Gets all the Validated Roa Payloads (VRPs) for a given ASN.
+
+        Args:
+        asn (int): The ASN to check.
+        """
+        if not bogons.valid_public_asn(asn):
+            raise ValueError(f"{asn} is not a valid ASN")
+
+        endpoint = "vrps"
+        resp = self._bgpstuff_request(f"{endpoint}/{asn}")
+
+        self.vrps = resp["Response"]["VRPs"]
 
     def get_totals(self) -> Tuple[int, int]:
         """Gets the total number of prefixes seen by the collector for the
