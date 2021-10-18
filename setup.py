@@ -11,7 +11,7 @@ with open(f"{here}/README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="bgpstuff",
-    version="1.0.7",
+    version="1.0.9",
     author="Darren O'Connor",
     author_email="nouser@bgpstuff.net",
     description="Python Client for Connecting to BGPStuff.net",
@@ -26,5 +26,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=["bogons", "ipaddress", "ratelimit", "requests"],
-    python_requires=">=3.6",
+    python_requires=">=3.7",
 )

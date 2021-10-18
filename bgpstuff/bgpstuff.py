@@ -10,7 +10,7 @@ from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.8"
+_version = "1.0.9"
 
 
 class BGPStuffError(Exception):
