@@ -14,6 +14,8 @@ class ClientTest(unittest.TestCase):
         self.client.get_route("8.8.8.8")
         self.assertEqual(ipaddress.ip_network(
             '8.8.8.0/24'), self.client.route)
+        self.client.get_route("1.2.3.4")
+        self.assertIsNone(self.client.route)
         self.client.get_route("2600::")
         self.assertEqual(ipaddress.ip_network(
             '2600::/48'), self.client.route)

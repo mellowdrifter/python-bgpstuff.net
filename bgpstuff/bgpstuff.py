@@ -10,7 +10,7 @@ from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.9"
+_version = "1.0.10"
 
 
 class BGPStuffError(Exception):
@@ -269,7 +269,11 @@ class Client:
         endpoint = "route"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        self.route = resp["Response"]["Route"]
+        if self.exists:
+            self.route = resp["Response"]["Route"]
+            return
+
+        self._route = None
 
     def get_origin(self, ip_address: str):
         """Gets the origin AS for the given IP address.
