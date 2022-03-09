@@ -10,7 +10,7 @@ from ratelimit import limits, sleep_and_retry
 from typing import Dict, List, Tuple
 
 
-_version = "1.0.10"
+_version = "1.0.13"
 
 
 class BGPStuffError(Exception):
@@ -287,7 +287,11 @@ class Client:
         endpoint = "origin"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        self.origin = resp["Response"]["Origin"]
+        if self.exists:
+            self.origin = resp["Response"]["Origin"]
+            return
+
+        self._origin = None
 
     def get_as_path(self, ip_address: str):
         """Gets the AS_PATH to the given IP address.
@@ -301,10 +305,16 @@ class Client:
         endpoint = "aspath"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        self.as_path = resp["Response"]["ASPath"]
+        if self.exists:
+            self.as_path = resp["Response"]["ASPath"]
 
-        if "ASSet" in resp["Response"]:
-            self.as_set = resp["Response"]["ASSet"]
+            if "ASSet" in resp["Response"]:
+                self.as_set = resp["Response"]["ASSet"]
+
+            return
+
+        self._as_path = None
+        self._as_set = None
 
     def get_roa(self, ip_address: str):
         """Gets the ROA of the route/prefix containing the given IP address.
@@ -318,7 +328,11 @@ class Client:
         endpoint = "roa"
         resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
 
-        self.roa = resp["Response"]["ROA"]
+        if self.exists:
+            self.roa = resp["Response"]["ROA"]
+            return
+
+        self._roa = None
 
     def get_as_name(self, asn: int):
         """Gets the name of the given ASN.
@@ -342,7 +356,11 @@ class Client:
         endpoint = "asname"
         resp = self._bgpstuff_request(f"{endpoint}/{asn}")
 
-        self.as_name = resp["Response"]["ASName"]
+        if self.exists:
+            self.as_name = resp["Response"]["ASName"]
+            return
+
+        self._as_name = None
 
     def get_sourced_prefixes(self, asn: int):
         """Gets a list of prefixes sourced by the given ASN.
@@ -356,7 +374,11 @@ class Client:
         endpoint = "sourced"
         resp = self._bgpstuff_request(f"{endpoint}/{asn}")
 
-        self.sourced = resp["Response"]["Sourced"]["Prefixes"]
+        if self.exists:
+            self.sourced = resp["Response"]["Sourced"]["Prefixes"]
+            return
+
+        self._sourced = None
 
     def get_vrps(self, asn: int):
         """Gets all the Validated Roa Payloads (VRPs) for a given ASN.
@@ -369,11 +391,15 @@ class Client:
 
         endpoint = "vrps"
         resp = self._bgpstuff_request(f"{endpoint}/{asn}")
+        if resp.get("Response").get("VRPs") is None:
+            self._vrps = None
+            return
 
         self.vrps = resp["Response"]["VRPs"]
+        return
 
     def get_totals(self) -> Tuple[int, int]:
-        """Gets the total number of prefixes seen by the collector for the
+        """Gets the total number of prefixes seen by the collector for
         both IPv4 and IPv6.
 
         Args:
