@@ -5,12 +5,15 @@
 import bogons
 import ipaddress
 import requests
+from cachetools import cached, TTLCache
 from http.client import responses
 from ratelimit import limits, sleep_and_retry
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 
-_version = "1.0.13"
+_version = "1.1.1"
+TEN_MINUTES = 10 * 60
+ONE_HOUR = 6 * TEN_MINUTES
 
 
 class BGPStuffError(Exception):
@@ -28,12 +31,12 @@ class Client:
     """
 
     def __init__(self, url="https://bgpstuff.net"):
-        self.url = url
-        self.session_headers = {
+        self._url = url
+        self._session_headers = {
             'Content-Type': 'application/json',
             'User-Agent': f'python-bgpstuff.net/{_version}',
         }
-        self.session = self._get_session()
+        self._session = self._get_session()
         self._status_code = None
         self._request_id = None
         self._route = None
@@ -53,13 +56,13 @@ class Client:
     def _get_session(self):
         """Make a requests session object with the proper headers."""
         session = requests.Session()
-        session.headers.update(self.session_headers)
+        session.headers.update(self._session_headers)
 
         return session
 
     def _close_session(self):
         """Closes a session"""
-        self.session.close()
+        self._session.close()
 
     @property
     def status(self) -> str:
@@ -229,19 +232,19 @@ class Client:
 
     @sleep_and_retry
     @limits(calls=30, period=60)
-    def _bgpstuff_request(self, endpoint: str):
+    def _bgpstuff_request(self, endpoint: str) -> Any:
         """Performs an arbitrary HTTP GET to BGPStuff.
 
         Args:
             endpoint (str): The REST endpoint to query
         """
-        # Reset exists and statuses as the query will fill these with new values.
-        self.exists = False
-        self.request_id = None
+        self._request_id = None
+        self._status_code = None
+        self._exists = None
 
-        url = f"{self.url}/{endpoint}"
+        url = f"{self._url}/{endpoint}"
 
-        request = self.session.get(url)
+        request = self._session.get(url)
 
         try:
             request.raise_for_status()
@@ -411,9 +414,12 @@ class Client:
         self.total_v4 = resp["Response"]["Totals"]["Ipv4"]
         self.total_v6 = resp["Response"]["Totals"]["Ipv6"]
 
+    @cached(cache=TTLCache(maxsize=1, ttl=TEN_MINUTES))
     def get_invalids(self, asn: int = 0):
         """Gets a list of all invalid prefixes observed by the BGPStuff
         route collector.
+
+        This call is cached for 10 minutes
 
         Args:
             asn (int): The ASN to lookup. Using 0 means ALL ASNs.
@@ -428,9 +434,12 @@ class Client:
             self.all_invalids = resp["Response"]["Invalids"]
             return
 
+    @cached(cache=TTLCache(maxsize=1, ttl=ONE_HOUR))
     def get_as_names(self):
         """Gets a list of all asnumber to asname mappings from the
         BGPStuff route collector
+
+        This call is cached for one hour
 
         Args:
             None
