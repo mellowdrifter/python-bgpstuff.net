@@ -11,7 +11,7 @@ from ratelimit import limits, sleep_and_retry
 from typing import Any, Dict, List, Tuple
 
 
-_version = "1.1.1"
+_version = "1.1.2"
 TEN_MINUTES = 10 * 60
 ONE_HOUR = 6 * TEN_MINUTES
 
@@ -33,8 +33,8 @@ class Client:
     def __init__(self, url="https://bgpstuff.net"):
         self._url = url
         self._session_headers = {
-            'Content-Type': 'application/json',
-            'User-Agent': f'python-bgpstuff.net/{_version}',
+            "Content-Type": "application/json",
+            "User-Agent": f"python-bgpstuff.net/{_version}",
         }
         self._session = self._get_session()
         self._status_code = None
@@ -52,6 +52,7 @@ class Client:
         self._vrps = None
         self._all_invalids = None
         self._exists = False
+        self._geoip = None
 
     def _get_session(self):
         """Make a requests session object with the proper headers."""
@@ -197,8 +198,7 @@ class Client:
 
     def invalids(self, asn: int) -> List[ipaddress.ip_network]:
         if not self._all_invalids:
-            raise BGPStuffError(
-                "call get_invalids() before calling get_invalids()")
+            raise BGPStuffError("call get_invalids() before calling get_invalids()")
         if asn in self._all_invalids:
             return self._all_invalids[asn]
         return None
@@ -219,6 +219,19 @@ class Client:
                     raise
                 prefixes.append(net)
             self._all_invalids[int(invalid["ASN"])] = prefixes
+
+    @property
+    def geoip(self) -> Dict:
+        return self._geoip
+
+    @geoip.setter
+    def geoip(self, geoip: Dict):
+        self._geoip = {}
+        self._geoip["Lat"] = geoip["Lat"]
+        self._geoip["Long"] = geoip["Long"]
+        self._geoip["City"] = geoip["City"]
+        self._geoip["Country"] = geoip["Country"]
+        self._geoip["Map"] = geoip["Map"]
 
     @property
     def all_as_names(self) -> Dict:
@@ -256,7 +269,7 @@ class Client:
         if "ID" in value:
             self._request_id = value["ID"]
         if "Exists" in value["Response"]:
-            self._exists = value['Response']['Exists']
+            self._exists = value["Response"]["Exists"]
 
         return value
 
@@ -364,6 +377,24 @@ class Client:
             return
 
         self._as_name = None
+
+    def get_geoip(self, ip_address: str):
+        """Gets the geo location of the IP address.
+
+        Args:
+            ip_address (str): The IP address to lookup.
+        """
+        if not bogons.is_public_ip(ip_address):
+            raise ValueError(f"{ip_address} is not a public IP address")
+
+        endpoint = "geoip"
+        resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
+
+        if self.exists:
+            self.geoip = resp["Response"]["GeoIP"]
+            return
+
+        self._geoip = None
 
     def get_sourced_prefixes(self, asn: int):
         """Gets a list of prefixes sourced by the given ASN.
