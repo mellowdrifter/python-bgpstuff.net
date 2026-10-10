@@ -1,64 +1,63 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Python client for the BGPStuff.net REST API.
-"""
+"""Python client for the BGPStuff.net REST API."""
+
 import bogons
 import ipaddress
 import requests
+import time
+import warnings
 from cachetools import cached, TTLCache
 from http.client import responses
-from ratelimit import limits, sleep_and_retry
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional
 
-
-_version = "1.1.2"
+_version = "3.0.0"
 TEN_MINUTES = 10 * 60
 ONE_HOUR = 6 * TEN_MINUTES
-
 
 class BGPStuffError(Exception):
     """GenericError Class for all BGPStuff Client Errors."""
 
-
 class Client:
     """Class Client is an object with all the required methods to
     interact with the REST API portions of bgpstuff.net. The class
-    should be reused as it has a built in rate-limiter as long as
-    you use the same object
+    should be reused to benefit from connection pooling and smart rate limiting.
 
     Args:
         url (str): The BGPStuff instance to query against.
+        api_key (str, optional): API key for authenticated requests.
     """
 
-    def __init__(self, url="https://bgpstuff.net"):
+    def __init__(self, url="https://bgpstuff.net", api_key=None):
         self._url = url
+        if "/v1" in self._url or "/v2" in self._url:
+            warnings.warn(
+                "The bgpstuff.net v1 and v2 APIs are deprecated and no longer available. "
+                "Please upgrade to v3. Update your base_url or install the latest version of this library.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._api_key = api_key
         self._session_headers = {
             "Content-Type": "application/json",
             "User-Agent": f"python-bgpstuff.net/{_version}",
         }
+        if api_key:
+            self._session_headers["Authorization"] = f"Bearer {api_key}"
+            
         self._session = self._get_session()
         self._status_code = None
         self._request_id = None
-        self._route = None
-        self._origin = None
-        self._as_name = None
-        self._all_as_names = None
-        self._as_path = None
-        self._as_set = None
-        self._roa = None
-        self._total_v4 = None
-        self._total_v6 = None
-        self._sourced = None
-        self._vrps = None
-        self._all_invalids = None
-        self._exists = False
-        self._geoip = None
+        self._cache_status = None
+        
+        # State for smart rate limiting
+        self._ratelimit_remaining = None
+        self._ratelimit_reset = None
 
     def _get_session(self):
         """Make a requests session object with the proper headers."""
         session = requests.Session()
         session.headers.update(self._session_headers)
-
         return session
 
     def _close_session(self):
@@ -67,419 +66,183 @@ class Client:
 
     @property
     def status(self) -> str:
-        return responses[self.status_code]
+        if self._status_code is None:
+            return ""
+        return responses.get(self._status_code, "Unknown Status Code")
 
     @property
-    def status_code(self) -> int:
+    def status_code(self) -> Optional[int]:
         return self._status_code
 
-    @status_code.setter
-    def status_code(self, code: int):
-        self._status_code = code
-
     @property
-    def exists(self) -> bool:
-        return self._exists
-
-    @exists.setter
-    def exists(self, exists: str):
-        if exists == "true":
-            self._exists = True
-        else:
-            self._exists = False
-
-    @property
-    def request_id(self) -> str:
+    def request_id(self) -> Optional[str]:
         return self._request_id
-
-    @request_id.setter
-    def request_id(self, request_id: str):
-        self._request_id = request_id
-
+        
     @property
-    def route(self) -> ipaddress.ip_network:
-        return self._route
+    def cache_status(self) -> Optional[str]:
+        return self._cache_status
 
-    @route.setter
-    def route(self, route: str):
-        # TODO: Prevent returning of this value
-        if route == "/0":
-            return
+    def _validate_ip_or_prefix(self, ip_or_prefix: str):
         try:
-            self._route = ipaddress.ip_network(route)
-        except:
-            raise
+            net = ipaddress.ip_network(ip_or_prefix, strict=False)
+            if not bogons.is_public_ip(str(net.network_address)):
+                raise ValueError(f"{ip_or_prefix} contains a bogon or private address")
+        except ValueError as e:
+            raise ValueError(f"{ip_or_prefix} is not a valid public IP address or prefix: {e}")
 
-    @property
-    def origin(self) -> int:
-        return self._origin
-
-    @origin.setter
-    def origin(self, origin: str):
-        self._origin = int(origin)
-
-    @property
-    def as_path(self) -> List[int]:
-        return self._as_path
-
-    @as_path.setter
-    def as_path(self, path: List[str]):
-        if path:
-            self._as_path = list(map(int, path))
-
-    @property
-    def as_set(self) -> List[int]:
-        return self._as_set
-
-    @as_set.setter
-    def as_set(self, path: List[str]):
-        if path:
-            self._as_set = list(map(int, path))
-
-    @property
-    def roa(self) -> str:
-        return self._roa
-
-    @roa.setter
-    def roa(self, roa: str):
-        self._roa = roa
-
-    @property
-    def as_name(self) -> str:
-        return self._as_name
-
-    @as_name.setter
-    def as_name(self, as_name: str):
-        self._as_name = as_name
-
-    @property
-    def total_v4(self) -> int:
-        return self._total_v4
-
-    @total_v4.setter
-    def total_v4(self, total: str):
-        self._total_v4 = int(total)
-
-    @property
-    def total_v6(self) -> int:
-        return self._total_v6
-
-    @total_v6.setter
-    def total_v6(self, total: str):
-        self._total_v6 = int(total)
-
-    @property
-    def sourced(self) -> List[ipaddress.ip_network]:
-        return self._sourced
-
-    @sourced.setter
-    def sourced(self, prefixes: List[str]):
-        self._sourced = []
-        for prefix in prefixes:
-            try:
-                net = ipaddress.ip_network(prefix)
-            except:
-                raise
-            self._sourced.append(net)
-
-    @property
-    def vrps(self) -> Dict:
-        return self._vrps
-
-    @vrps.setter
-    def vrps(self, vrps: Dict):
-        self._vrps = {}
-        for vrp in vrps:
-            try:
-                net = ipaddress.ip_network(vrp["Prefix"])
-            except:
-                raise
-            self._vrps[net] = vrp["Max"]
-
-    def invalids(self, asn: int) -> List[ipaddress.ip_network]:
-        if not self._all_invalids:
-            raise BGPStuffError("call get_invalids() before calling get_invalids()")
-        if asn in self._all_invalids:
-            return self._all_invalids[asn]
-        return None
-
-    @property
-    def all_invalids(self) -> Dict:
-        return self._all_invalids
-
-    @all_invalids.setter
-    def all_invalids(self, invalids: Dict):
-        self._all_invalids = {}
-        for invalid in invalids:
-            prefixes = []
-            for prefix in invalid["Prefixes"]:
-                try:
-                    net = ipaddress.ip_network(prefix)
-                except:
-                    raise
-                prefixes.append(net)
-            self._all_invalids[int(invalid["ASN"])] = prefixes
-
-    @property
-    def geoip(self) -> Dict:
-        return self._geoip
-
-    @geoip.setter
-    def geoip(self, geoip: Dict):
-        self._geoip = {}
-        self._geoip["Lat"] = geoip["Lat"]
-        self._geoip["Long"] = geoip["Long"]
-        self._geoip["City"] = geoip["City"]
-        self._geoip["Country"] = geoip["Country"]
-        self._geoip["Map"] = geoip["Map"]
-
-    @property
-    def all_as_names(self) -> Dict:
-        return self._all_as_names
-
-    @all_as_names.setter
-    def all_as_names(self, asnames: Dict):
-        self._all_as_names = {}
-        for asn in asnames:
-            self._all_as_names[int(asn["ASN"])] = asn["ASName"]
-
-    @sleep_and_retry
-    @limits(calls=30, period=60)
     def _bgpstuff_request(self, endpoint: str) -> Any:
-        """Performs an arbitrary HTTP GET to BGPStuff.
+        """Performs an HTTP GET to BGPStuff with smart rate limiting.
 
         Args:
             endpoint (str): The REST endpoint to query
         """
         self._request_id = None
         self._status_code = None
-        self._exists = None
+        self._cache_status = None
 
-        url = f"{self._url}/{endpoint}"
+        url = f"{self._url}/api/v3/{endpoint}"
+        
+        # Smart Rate Limiting Pre-emption
+        if self._ratelimit_remaining is not None and self._ratelimit_remaining <= 0:
+            if self._ratelimit_reset is not None:
+                sleep_time = max(0, int(self._ratelimit_reset) - int(time.time()))
+                if sleep_time > 0:
+                    time.sleep(sleep_time + 1)
 
-        request = self._session.get(url)
+        max_retries = 3
+        backoff_factor = 2
 
-        try:
-            request.raise_for_status()
-        except requests.exceptions.HTTPError as error:
-            raise BGPStuffError from error
+        for attempt in range(max_retries + 1):
+            request = self._session.get(url)
+            self._status_code = request.status_code
+            self._request_id = request.headers.get("X-Request-ID")
+            self._cache_status = request.headers.get("X-Cache")
+            
+            remaining = request.headers.get("X-RateLimit-Remaining")
+            if remaining is not None:
+                self._ratelimit_remaining = int(remaining)
+            reset_ts = request.headers.get("X-RateLimit-Reset")
+            if reset_ts is not None:
+                self._ratelimit_reset = int(reset_ts)
+            
+            if request.status_code == 429:
+                if reset_ts:
+                    sleep_time = max(0, int(reset_ts) - int(time.time())) + 1
+                else:
+                    sleep_time = backoff_factor ** attempt
+                    
+                if attempt < max_retries:
+                    time.sleep(sleep_time)
+                    continue
+                else:
+                    raise BGPStuffError("Rate limit exceeded and max retries reached.")
 
-        self._status_code = request.status_code
-        value = request.json()
-        if "ID" in value:
-            self._request_id = value["ID"]
-        if "Exists" in value["Response"]:
-            self._exists = value["Response"]["Exists"]
+            if request.status_code == 404:
+                return None
 
-        return value
+            try:
+                request.raise_for_status()
+            except requests.exceptions.HTTPError as error:
+                try:
+                    error_msg = request.json().get("error", str(error))
+                except Exception:
+                    error_msg = str(error)
+                raise BGPStuffError(f"HTTP Error {request.status_code}: {error_msg}") from error
 
-    def get_route(self, ip_address: str):
-        """Gets the rib entry for the given IP address.
+            return request.json()
 
-        Args:
-            ip_address (str): The IP address to lookup.
-        """
-        if not bogons.is_public_ip(ip_address):
-            raise ValueError(f"{ip_address} is not a public IP address")
+    def get_route(self, ip_address: str) -> Optional[Dict]:
+        """Gets the rib entry for the given IP address or prefix."""
+        self._validate_ip_or_prefix(ip_address)
+        return self._bgpstuff_request(f"route/{ip_address}")
 
-        endpoint = "route"
-        resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
+    def get_origin(self, ip_address: str) -> Optional[Dict]:
+        """Gets the origin AS for the given IP address or prefix."""
+        self._validate_ip_or_prefix(ip_address)
+        return self._bgpstuff_request(f"origin/{ip_address}")
 
-        if self.exists:
-            self.route = resp["Response"]["Route"]
-            return
+    def get_as_path(self, ip_address: str) -> Optional[Dict]:
+        """Gets the AS_PATH to the given IP address or prefix."""
+        self._validate_ip_or_prefix(ip_address)
+        return self._bgpstuff_request(f"aspath/{ip_address}")
 
-        self._route = None
+    def get_roa(self, ip_address: str) -> Optional[Dict]:
+        """Gets the ROA of the route/prefix containing the given IP address or prefix."""
+        self._validate_ip_or_prefix(ip_address)
+        return self._bgpstuff_request(f"roa/{ip_address}")
 
-    def get_origin(self, ip_address: str):
-        """Gets the origin AS for the given IP address.
-
-        Args:
-            ip_address (str): The IP address to lookup.
-        """
-        if not bogons.is_public_ip(ip_address):
-            raise ValueError(f"{ip_address} is not a public IP address")
-
-        endpoint = "origin"
-        resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
-
-        if self.exists:
-            self.origin = resp["Response"]["Origin"]
-            return
-
-        self._origin = None
-
-    def get_as_path(self, ip_address: str):
-        """Gets the AS_PATH to the given IP address.
-
-        Args:
-            ip_address (str): The IP address to lookup.
-        """
-        if not bogons.is_public_ip(ip_address):
-            raise ValueError(f"{ip_address} is not a public IP address")
-
-        endpoint = "aspath"
-        resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
-
-        if self.exists:
-            self.as_path = resp["Response"]["ASPath"]
-
-            if "ASSet" in resp["Response"]:
-                self.as_set = resp["Response"]["ASSet"]
-
-            return
-
-        self._as_path = None
-        self._as_set = None
-
-    def get_roa(self, ip_address: str):
-        """Gets the ROA of the route/prefix containing the given IP address.
-
-        Args:
-            ip_address (str): The IP address to lookup.
-        """
-        if not bogons.is_public_ip(ip_address):
-            raise ValueError(f"{ip_address} is not a public IP address")
-
-        endpoint = "roa"
-        resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
-
-        if self.exists:
-            self.roa = resp["Response"]["ROA"]
-            return
-
-        self._roa = None
-
-    def get_as_name(self, asn: int):
-        """Gets the name of the given ASN.
-
-        Args:
-            asn (int): The ASN to lookup.
-        """
+    def get_as_name(self, asn: int) -> Optional[Dict]:
+        """Gets the name of the given ASN."""
         if not bogons.valid_public_asn(asn):
             raise ValueError(f"{asn} is not a valid ASN")
+        return self._bgpstuff_request(f"asname/{asn}")
 
-        # Check local all_asnames first
-        if self._all_as_names:
-            self._status_code = 200
-            if asn in self._all_as_names:
-                self._as_name = self._all_as_names[asn]
-                self._exists = True
-                return
-            self._exists = False
-            return
+    def get_geoip(self, ip_address: str) -> Optional[Dict]:
+        """Gets the geo location of the IP address."""
+        if ip_address != "self":
+            self._validate_ip_or_prefix(ip_address)
+        return self._bgpstuff_request(f"geoip/{ip_address}")
 
-        endpoint = "asname"
-        resp = self._bgpstuff_request(f"{endpoint}/{asn}")
-
-        if self.exists:
-            self.as_name = resp["Response"]["ASName"]
-            return
-
-        self._as_name = None
-
-    def get_geoip(self, ip_address: str):
-        """Gets the geo location of the IP address.
-
-        Args:
-            ip_address (str): The IP address to lookup.
-        """
-        if not bogons.is_public_ip(ip_address):
-            raise ValueError(f"{ip_address} is not a public IP address")
-
-        endpoint = "geoip"
-        resp = self._bgpstuff_request(f"{endpoint}/{ip_address}")
-
-        if self.exists:
-            self.geoip = resp["Response"]["GeoIP"]
-            return
-
-        self._geoip = None
-
-    def get_sourced_prefixes(self, asn: int):
-        """Gets a list of prefixes sourced by the given ASN.
-
-        Args:
-            asn (int): The ASN to lookup.
-        """
+    def get_sourced_prefixes(self, asn: int) -> Optional[Dict]:
+        """Gets a list of prefixes sourced by the given ASN."""
         if not bogons.valid_public_asn(asn):
             raise ValueError(f"{asn} is not a valid ASN")
-
-        endpoint = "sourced"
-        resp = self._bgpstuff_request(f"{endpoint}/{asn}")
-
-        if self.exists:
-            self.sourced = resp["Response"]["Sourced"]["Prefixes"]
-            return
-
-        self._sourced = None
+        return self._bgpstuff_request(f"sourced/{asn}")
 
     def get_vrps(self, asn: int):
-        """Gets all the Validated Roa Payloads (VRPs) for a given ASN.
+        """Deprecated in v3 API."""
+        raise NotImplementedError("VRPs are not supported in the v3 API.")
 
-        Args:
-        asn (int): The ASN to check.
-        """
-        if not bogons.valid_public_asn(asn):
-            raise ValueError(f"{asn} is not a valid ASN")
+    def get_totals(self):
+        """Deprecated standalone endpoint in v3 API."""
+        raise NotImplementedError("Totals are not yet implemented in the v3 API.")
 
-        endpoint = "vrps"
-        resp = self._bgpstuff_request(f"{endpoint}/{asn}")
-        if resp.get("Response").get("VRPs") is None:
-            self._vrps = None
-            return
+    def get_community(self, high: int, low: int) -> Optional[Dict]:
+        """Gets routes matching a standard community (high:low)."""
+        return self._bgpstuff_request(f"community/{high}:{low}")
 
-        self.vrps = resp["Response"]["VRPs"]
-        return
+    def get_large_community(self, global_admin: int, local_data1: int, local_data2: int) -> Optional[Dict]:
+        """Gets routes matching a large community."""
+        return self._bgpstuff_request(f"large-community/{global_admin}:{local_data1}:{local_data2}")
 
-    def get_totals(self) -> Tuple[int, int]:
-        """Gets the total number of prefixes seen by the collector for
-        both IPv4 and IPv6.
+    def get_aspath_search(self, regex: str) -> Optional[Dict]:
+        """Gets routes whose AS_PATH matches the regex. Requires Auth."""
+        # Using requests' params to properly URL-encode the regex
+        # We need to adjust _bgpstuff_request or append it manually.
+        # Since it's the only one with query string, doing it manually is simple:
+        import urllib.parse
+        encoded_regex = urllib.parse.quote(regex)
+        return self._bgpstuff_request(f"aspath-search?regex={encoded_regex}")
 
-        Args:
-            None
-        """
-        endpoint = "totals"
-        resp = self._bgpstuff_request(f"{endpoint}")
+    def get_peers(self) -> Optional[Dict]:
+        """Gets summary of peers."""
+        return self._bgpstuff_request("peers")
 
-        self.total_v4 = resp["Response"]["Totals"]["Ipv4"]
-        self.total_v6 = resp["Response"]["Totals"]["Ipv6"]
+    def get_masks(self) -> Optional[Dict]:
+        """Gets subnet mask distribution."""
+        return self._bgpstuff_request("masks")
+
+    def get_whereami(self) -> Optional[Dict]:
+        """Gets metadata about the caller."""
+        return self._bgpstuff_request("whereami")
+
+    def get_stats(self) -> Optional[Dict]:
+        """Gets time-series stats including totals."""
+        return self._bgpstuff_request("stats")
 
     @cached(cache=TTLCache(maxsize=1, ttl=TEN_MINUTES))
-    def get_invalids(self, asn: int = 0):
-        """Gets a list of all invalid prefixes observed by the BGPStuff
-        route collector.
-
-        This call is cached for 10 minutes
-
-        Args:
-            asn (int): The ASN to lookup. Using 0 means ALL ASNs.
-        """
+    def get_invalids(self, asn: int = 0) -> Optional[Dict]:
+        """Gets a list of all invalid prefixes. Requires Auth."""
         if asn != 0:
             if not bogons.valid_public_asn(asn):
                 raise ValueError(f"{asn} is not a valid ASN")
-
-        endpoint = "invalids"
-        if asn == 0:
-            resp = self._bgpstuff_request(f"{endpoint}/")
-            self.all_invalids = resp["Response"]["Invalids"]
-            return
+            return self._bgpstuff_request(f"invalids/{asn}")
+        return self._bgpstuff_request("invalids")
 
     @cached(cache=TTLCache(maxsize=1, ttl=ONE_HOUR))
-    def get_as_names(self):
-        """Gets a list of all asnumber to asname mappings from the
-        BGPStuff route collector
-
-        This call is cached for one hour
-
-        Args:
-            None
-        """
-
-        endpoint = "asnames"
-        resp = self._bgpstuff_request(f"{endpoint}/")
-        self.all_as_names = resp["Response"]["ASNames"]
-
+    def get_as_names(self) -> Optional[Dict]:
+        """Gets a list of all asnumber to asname mappings. Requires Auth."""
+        return self._bgpstuff_request("asnames")
 
 if __name__ == "__main__":
     raise BGPStuffError("This is a library, please do not run directly.")
